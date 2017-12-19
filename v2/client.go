@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"net/url"
 
+	"git.haps.pw/api-base"
 	"github.com/bitfinexcom/bitfinex-api-go/utils"
 )
 
@@ -42,6 +43,8 @@ type Client struct {
 	Platform  *PlatformService
 	Positions *PositionService
 	Trades    *TradeService
+
+	EventCh chan<- api_base.ExchangeEvent
 }
 
 func NewClient() *Client {

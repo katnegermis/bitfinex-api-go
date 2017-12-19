@@ -13,6 +13,7 @@ import (
 	"time"
 	"unicode"
 
+	"git.haps.pw/api-base"
 	"github.com/bitfinexcom/bitfinex-api-go/utils"
 
 	"github.com/gorilla/websocket"
@@ -232,6 +233,13 @@ func (b *bfxWebsocket) Send(ctx context.Context, msg interface{}) error {
 }
 
 func (b *bfxWebsocket) handleMessage(msg []byte) error {
+	if b.client.EventCh != nil {
+		b.client.EventCh <- api_base.ExchangeEvent{
+			Exchange: "bitfinex",
+			RawData:  string(msg),
+		}
+	}
+
 	t := bytes.TrimLeftFunc(msg, unicode.IsSpace)
 	if bytes.HasPrefix(t, []byte("[")) { // Data messages are just arrays of values.
 		var raw []interface{}
