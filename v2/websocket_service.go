@@ -72,6 +72,8 @@ type bfxWebsocket struct {
 	done  chan struct{}
 	errMu sync.Mutex
 	err   error
+
+	messageReceiver func(b *bfxWebsocket)
 }
 
 type handlerT func(interface{})
@@ -83,8 +85,9 @@ type publicSubInfo struct {
 
 func newBfxWebsocket(c *Client, wsURL string) *bfxWebsocket {
 	b := &bfxWebsocket{
-		client:       c,
-		webSocketURL: wsURL,
+		client:          c,
+		webSocketURL:    wsURL,
+		messageReceiver: defaultWebsocketReceiver,
 	}
 	b.init()
 
@@ -119,7 +122,7 @@ func (b *bfxWebsocket) connect() error {
 
 	b.ws = ws
 
-	go b.receiver()
+	go b.messageReceiver(b)
 
 	return nil
 }
@@ -133,7 +136,7 @@ func (b *bfxWebsocket) init() {
 	b.done = make(chan struct{})
 }
 
-func (b *bfxWebsocket) receiver() {
+func defaultWebsocketReceiver(b *bfxWebsocket) {
 	for {
 		if b.ws == nil {
 			return

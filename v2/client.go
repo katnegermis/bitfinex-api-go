@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"log"
 	"net/http"
 	"net/url"
 
@@ -49,6 +50,20 @@ type Client struct {
 
 func NewClient() *Client {
 	return NewClientWithHTTP(http.DefaultClient)
+}
+
+func NewClientMessageSimulator(ch <-chan api_base.ExchangeEvent) *Client {
+	c := NewClientWithHTTP(http.DefaultClient)
+	c.Websocket.messageReceiver = func(b *bfxWebsocket) {
+		for event := range ch {
+			log.Printf("Simulated event %+v\n", event)
+			err := b.handleMessage([]byte(event.RawData))
+			if err != nil {
+				log.Printf("[WARN]: %s\n", err)
+			}
+		}
+	}
+	return c
 }
 
 func NewClientWithHTTP(h *http.Client) *Client {
