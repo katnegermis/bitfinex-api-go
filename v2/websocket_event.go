@@ -100,6 +100,10 @@ func (b *bfxWebsocket) onEvent(msg []byte) (interface{}, error) {
 			return nil, err
 		}
 
+		if b.subscribeMessageCallback != nil {
+			b.subscribeMessageCallback(b, s)
+		}
+
 		b.subMu.Lock()
 		if info, ok := b.pubSubIDs[s.SubID]; ok {
 			b.pubChanIDs[s.ChanID] = info.req

@@ -3,6 +3,7 @@ package bitfinex
 
 import (
 	"bytes"
+	"context"
 	"crypto/hmac"
 	"crypto/sha512"
 	"encoding/hex"
@@ -52,17 +53,43 @@ func NewClient() *Client {
 	return NewClientWithHTTP(http.DefaultClient)
 }
 
-func NewClientMessageSimulator(ch <-chan api_base.ExchangeEvent) *Client {
+func NewClientSimulatedWebsocket(ch <-chan api_base.ExchangeEvent) *Client {
 	c := NewClientWithHTTP(http.DefaultClient)
-	c.Websocket.messageReceiver = func(b *bfxWebsocket) {
+
+	c.Websocket.receiver = func(b *bfxWebsocket) {
 		for event := range ch {
-			log.Printf("Simulated event %+v\n", event)
 			err := b.handleMessage([]byte(event.RawData))
 			if err != nil {
 				log.Printf("[WARN]: %s\n", err)
 			}
 		}
 	}
+
+	c.Websocket.connector = func(b *bfxWebsocket) error {
+		b.init()
+		go b.receiver(b)
+		return nil
+	}
+
+	c.Websocket.subscriber = func(b *bfxWebsocket, ctx context.Context, msg *PublicSubscriptionRequest, h handlerT) error {
+		for _, v := range b.pubChanIDs {
+			if v == *msg {
+				return fmt.Errorf("already subscribed to the channel requested")
+			}
+		}
+
+		msg.Event = "subscribe"
+		msg.SubID = utils.GetNonce()
+
+		c.Websocket.subscribeMessageCallback = func(b *bfxWebsocket, s SubscribeEvent) {
+			b.subMu.Lock()
+			b.pubSubIDs[s.SubID] = publicSubInfo{req: *msg, h: h}
+			b.subMu.Unlock()
+		}
+
+		return nil
+	}
+
 	return c
 }
 

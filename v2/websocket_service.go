@@ -73,7 +73,10 @@ type bfxWebsocket struct {
 	errMu sync.Mutex
 	err   error
 
-	messageReceiver func(b *bfxWebsocket)
+	receiver                 func(b *bfxWebsocket)
+	connector                func(b *bfxWebsocket) error
+	subscriber               func(b *bfxWebsocket, ctx context.Context, msg *PublicSubscriptionRequest, h handlerT) error
+	subscribeMessageCallback func(b *bfxWebsocket, s SubscribeEvent)
 }
 
 type handlerT func(interface{})
@@ -85,9 +88,11 @@ type publicSubInfo struct {
 
 func newBfxWebsocket(c *Client, wsURL string) *bfxWebsocket {
 	b := &bfxWebsocket{
-		client:          c,
-		webSocketURL:    wsURL,
-		messageReceiver: defaultWebsocketReceiver,
+		client:       c,
+		webSocketURL: wsURL,
+		receiver:     defaultWebsocketReceiver,
+		connector:    defaultWebsocketConnector,
+		subscriber:   defaultWebsocketSubscriber,
 	}
 	b.init()
 
@@ -95,6 +100,10 @@ func newBfxWebsocket(c *Client, wsURL string) *bfxWebsocket {
 }
 
 func (b *bfxWebsocket) Connect() error {
+	return b.connector(b)
+}
+
+func defaultWebsocketConnector(b *bfxWebsocket) error {
 	if b.ws != nil {
 		return nil // We're already connected.
 	}
@@ -122,7 +131,7 @@ func (b *bfxWebsocket) connect() error {
 
 	b.ws = ws
 
-	go b.messageReceiver(b)
+	go b.receiver(b)
 
 	return nil
 }
@@ -282,6 +291,7 @@ func (b *bfxWebsocket) handleMessage(msg []byte) error {
 			}
 		} else {
 			// TODO: log unhandled message?
+			log.Printf("[WARN] ChanID %+v not registered.\n", chanID)
 		}
 	} else if bytes.HasPrefix(t, []byte("{")) { // Events are encoded as objects.
 		ev, err := b.onEvent(msg)

@@ -65,8 +65,12 @@ type PublicSubscriptionRequest struct {
 	SubID     string `json:"subId,omitempty"`
 }
 
-// Subscribe to one of the public websocket channels.
 func (b *bfxWebsocket) Subscribe(ctx context.Context, msg *PublicSubscriptionRequest, h handlerT) error {
+	return b.subscriber(b, ctx, msg, h)
+}
+
+// Subscribe to one of the public websocket channels.
+func defaultWebsocketSubscriber(b *bfxWebsocket, ctx context.Context, msg *PublicSubscriptionRequest, h handlerT) error {
 	if b.ws == nil {
 		return ErrWSNotConnected
 	} else if msg == nil {
