@@ -112,6 +112,14 @@ func defaultWebsocketConnector(b *bfxWebsocket) error {
 	return b.connect()
 }
 
+// fakeWebsocketConnector fakes initiating a websocket connection
+// to bitfinex, but still initializes bfsWebsocket and runs the message receiver.
+func fakeWebsocketConnector(b *bfxWebsocket) error {
+	b.init()
+	go b.receiver(b)
+	return nil
+}
+
 func (b *bfxWebsocket) connect() error {
 	b.wsMu.Lock()
 	defer b.wsMu.Unlock()
@@ -170,6 +178,19 @@ func defaultWebsocketReceiver(b *bfxWebsocket) {
 		err = b.handleMessage(msg)
 		if err != nil {
 			log.Printf("[WARN]: %s\n", err)
+		}
+	}
+}
+
+// fakeWebsocketReceiver allows for simulating receiving messages over
+// a websocket connection by reading from a channel instead.
+func fakeWebsocketReceiver(ch <-chan api_base.ExchangeEvent) func(*bfxWebsocket) {
+	return func(b *bfxWebsocket) {
+		for event := range ch {
+			err := b.handleMessage([]byte(event.RawData))
+			if err != nil {
+				log.Printf("[WARN]: %s\n", err)
+			}
 		}
 	}
 }

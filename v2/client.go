@@ -3,7 +3,6 @@ package bitfinex
 
 import (
 	"bytes"
-	"context"
 	"crypto/hmac"
 	"crypto/sha512"
 	"encoding/hex"
@@ -11,7 +10,6 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"log"
 	"net/http"
 	"net/url"
 
@@ -46,6 +44,7 @@ type Client struct {
 	Positions *PositionService
 	Trades    *TradeService
 
+	// When EventCh is set, all data received by handleMessage will also be forwarded on this channel
 	EventCh chan<- api_base.ExchangeEvent
 }
 
@@ -53,43 +52,15 @@ func NewClient() *Client {
 	return NewClientWithHTTP(http.DefaultClient)
 }
 
+// NewClientSimulatedWebsocket allows for simulating messages received
+// from bitfinex, by sending messages over `ch` instead of relying on
+// receiving messages over the websocket.
+// This can be used for replaying a previously recorded websocket session.
 func NewClientSimulatedWebsocket(ch <-chan api_base.ExchangeEvent) *Client {
 	c := NewClientWithHTTP(http.DefaultClient)
-
-	c.Websocket.receiver = func(b *bfxWebsocket) {
-		for event := range ch {
-			err := b.handleMessage([]byte(event.RawData))
-			if err != nil {
-				log.Printf("[WARN]: %s\n", err)
-			}
-		}
-	}
-
-	c.Websocket.connector = func(b *bfxWebsocket) error {
-		b.init()
-		go b.receiver(b)
-		return nil
-	}
-
-	c.Websocket.subscriber = func(b *bfxWebsocket, ctx context.Context, msg *PublicSubscriptionRequest, h handlerT) error {
-		for _, v := range b.pubChanIDs {
-			if v == *msg {
-				return fmt.Errorf("already subscribed to the channel requested")
-			}
-		}
-
-		msg.Event = "subscribe"
-		msg.SubID = utils.GetNonce()
-
-		c.Websocket.subscribeMessageCallback = func(b *bfxWebsocket, s SubscribeEvent) {
-			b.subMu.Lock()
-			b.pubSubIDs[s.SubID] = publicSubInfo{req: *msg, h: h}
-			b.subMu.Unlock()
-		}
-
-		return nil
-	}
-
+	c.Websocket.receiver = fakeWebsocketReceiver(ch)
+	c.Websocket.connector = fakeWebsocketConnector
+	c.Websocket.subscriber = fakeWebsocketSubscriber
 	return c
 }
 

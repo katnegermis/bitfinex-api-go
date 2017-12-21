@@ -93,6 +93,31 @@ func defaultWebsocketSubscriber(b *bfxWebsocket, ctx context.Context, msg *Publi
 	return b.Send(ctx, msg)
 }
 
+// fakeWebsocketSubscriber registers internal channel subscriptions in pubSubIDs
+// on incoming "subscribed" messages. This is used together with the other fakeWebsocket-
+// methods to allow for replaying previously recorded websocket sessions.
+func fakeWebsocketSubscriber(b *bfxWebsocket, ctx context.Context, msg *PublicSubscriptionRequest, h handlerT) error {
+	for _, v := range b.pubChanIDs {
+		if v == *msg {
+			return fmt.Errorf("already subscribed to the channel requested")
+		}
+	}
+
+	msg.Event = "subscribe"
+	msg.SubID = utils.GetNonce()
+
+	// This callback allows for setting up internal channel subscriptions even when
+	// we do not know the SubID before receiving (a simulated) "subscribed"-acknowledgement
+	// from bitfinex.
+	b.subscribeMessageCallback = func(b *bfxWebsocket, s SubscribeEvent) {
+		b.subMu.Lock()
+		b.pubSubIDs[s.SubID] = publicSubInfo{req: *msg, h: h}
+		b.subMu.Unlock()
+	}
+
+	return nil
+}
+
 func (b *bfxWebsocket) handlePublicDataMessage(raw []interface{}) (interface{}, error) {
 	switch len(raw) {
 	case 2:
